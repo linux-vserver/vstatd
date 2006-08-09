@@ -17,15 +17,13 @@
 
 # Generic configuration
 AC_PREREQ(2.59)
-AC_INIT(vstatd, 1.0.0, hollow@gentoo.org)
+AC_INIT(vstatd, 1.0, hollow@gentoo.org)
 AC_CONFIG_HEADER([config.h])
 AC_GNU_SOURCE
 
 AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
 AC_CANONICAL_TARGET
-
-AC_CONFIG_SUBDIRS(lib/libarchive)
 
 # Automake
 AM_INIT_AUTOMAKE([1.9 gnu dist-bzip2])
