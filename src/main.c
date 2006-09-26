@@ -127,11 +127,6 @@ int main (int argc, char *argv[]) {
 	char c, *pidfile = NULL;
 	int fd, debug = 0;
 	pid_t pid;
-
-	if (getuid() != 0) {
-		fprintf(stderr, "root access is needed\n");
-		exit(EXIT_FAILURE);
-	}
 	
 	/* parse command line */
 	while ((c = getopt(argc, argv, "dc:")) != -1) {
