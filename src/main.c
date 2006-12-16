@@ -28,6 +28,7 @@
 #include <dirent.h>
 #include <lucid/open.h>
 #include <lucid/str.h>
+#include <vserver.h>
 
 #include "cfg.h"
 #include "log.h"
@@ -61,7 +62,7 @@ void handle_xid(xid_t xid)
 {
 	time_t cacct_time, cvirt_time, limit_time, loadavg_time;
 	char *name;
-	struct vx_vhi_name vhi_name;
+	vx_uname_t uname;
 	
 	if (cacct_parse(xid, &cacct_time) == -1 ||
 	    cvirt_parse(xid, &cvirt_time) == -1 ||
@@ -69,20 +70,20 @@ void handle_xid(xid_t xid)
 	    loadavg_parse(xid, &loadavg_time) == -1)
 		return;
 	
-	vhi_name.field = VHIN_CONTEXT;
+	uname.id = VHIN_CONTEXT;
 	
-	if (vx_get_vhi_name(xid, &vhi_name) == -1) {
-		log_error("vx_get_vhi_name(%d): %s", xid, strerror(errno));
+	if (vx_uname_get(xid, &uname) == -1) {
+		log_error("vx_uname_get(%d): %s", xid, strerror(errno));
 		return;
 	}
 	
 	/* For util-vserver guests */
-	if (vhi_name.name[0] == '/')
-		name = strrchr(vhi_name.name, '/') + 1;
+	if (uname.value[0] == '/')
+		name = strrchr(uname.value, '/') + 1;
 	
 	/* For vserver-utils guests */
 	else
-		name = vhi_name.name;
+		name = uname.value;
 
 	if (cacct_rrd_check(name) == -1 ||
 	    cvirt_rrd_check(name) == -1 ||

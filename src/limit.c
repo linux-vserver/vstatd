@@ -82,7 +82,7 @@ int limit_parse(xid_t xid, time_t *curtime)
 	
 	close(fd);
 	
-	if (vx_reset_rlimit(xid) == -1)
+	if (vx_limit_reset(xid) == -1)
 		log_warn("vx_reset_rlimit(%d): %s", xid, strerror(errno));
 	
 	while ((p = strsep(&buf, "\n"))) {

@@ -37,7 +37,7 @@ AC_PROG_LN_S
 AC_PROG_MAKE_SET
 
 # Checks for libraries.
-AC_CHECK_LIB(vserver, vx_clone_namespace, 
+AC_CHECK_LIB(vserver, vx_stat, 
 	VSERVER_LIBS="-lvserver", AC_MSG_ERROR([libvserver >= 2.0 not found]),)
 
 AC_SUBST(VSERVER_LIBS)
