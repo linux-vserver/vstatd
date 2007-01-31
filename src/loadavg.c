@@ -112,7 +112,7 @@ int loadavg_rrd_update(char *name, time_t curtime)
 	char *buf = NULL;
 
 	asprintf(&buf,
-		"update %s/%s/sys_LOADAVG.rrd %ld:%f:%f:%f",
+		"update %s/%s/sys_LOADAVG.rrd %ld:%" PRIu32 ":%" PRIu32 ":%" PRIu32,
 		datadir,
 		name,
 		vrrd_align_time(curtime),
