@@ -36,18 +36,18 @@ int loadavg_parse(xid_t xid, time_t *curtime)
 
 	if (curtime)
 		*curtime = time(NULL);
-	
+
 	vx_stat_t sb;
-	
+
 	if (vx_stat(xid, &sb) == -1) {
 		log_perror("vx_stat(%d)", xid);
 		return -1;
 	}
-	
+
 	LOADAVG[0] = sb.load[0];
 	LOADAVG[1] = sb.load[1];
 	LOADAVG[2] = sb.load[2];
-	
+
 	return 0;
 }
 
@@ -58,7 +58,7 @@ int loadavg_rrd_create(char *path)
 
 	char timestr[32];
 	time_t curtime = time(NULL);
-	
+
 	char *argv[] = {
 		"create", path, "-b", timestr, "-s", STEP_STR,
 		"DS:1MIN:GAUGE:" STEP_STR ":0:9223372036854775807",
@@ -66,22 +66,22 @@ int loadavg_rrd_create(char *path)
 		"DS:15MIN:GAUGE:" STEP_STR ":0:9223372036854775807",
 		RRA_DEFAULT
 	};
-	
+
 	int argc = sizeof(argv) / sizeof(*argv);
-	
+
 	snprintf(timestr, 32, "%ld", curtime - STEP - (curtime % STEP));
-	
+
 	if (mkdirnamep(path, 0700) == -1) {
 		log_perror("mkdirnamep(%s)", path);
 		return -1;
 	}
-	
+
 	if (rrd_create(argc, argv) == -1) {
 		log_error("rrd_create(%s): %s", path, rrd_get_error());
 		rrd_clear_error();
 		return -1;
 	}
-	
+
 	return 0;
 }
 
@@ -91,16 +91,16 @@ int loadavg_rrd_check(char *name)
 
 	const char *datadir = cfg_getstr(cfg, "datadir");;
 	char *path = NULL;
-	
+
 	asprintf(&path, "%s/%s/sys_LOADAVG.rrd", datadir, name);
-	
+
 	if (!isfile(path) && loadavg_rrd_create(path) == -1) {
 		mem_free(path);
 		return -1;
 	}
-	
+
 	mem_free(path);
-	
+
 	return 0;
 }
 
@@ -110,7 +110,7 @@ int loadavg_rrd_update(char *name, time_t curtime)
 
 	const char *datadir = cfg_getstr(cfg, "datadir");
 	char *buf = NULL;
-	
+
 	asprintf(&buf,
 		"update %s/%s/sys_LOADAVG.rrd %ld:%f:%f:%f",
 		datadir,
@@ -119,7 +119,7 @@ int loadavg_rrd_update(char *name, time_t curtime)
 		LOADAVG[0],
 		LOADAVG[1],
 		LOADAVG[2]);
-	
+
 	strtok_t _st, *st = &_st;
 
 	if (!strtok_init_str(st, buf, " ", 0)) {
@@ -148,6 +148,6 @@ int loadavg_rrd_update(char *name, time_t curtime)
 		rrd_clear_error();
 		return -1;
 	}
-	
+
 	return 0;
 }

@@ -58,27 +58,27 @@ int limit_parse(xid_t xid, time_t *curtime)
 
 	if (curtime)
 		*curtime = time(NULL);
-	
+
 	if (vx_limit_reset(xid) == -1)
 		log_pwarn("vx_reset_rlimit(%d)", xid);
-	
+
 	int i;
-	
+
 	for (i = 0; LIMIT[i].db; i++) {
 		vx_limit_stat_t sb;
-		
+
 		sb.id = LIMIT[i].id;
-		
+
 		if (vx_limit_stat(xid, &sb) == -1) {
 			log_perror("x_limit_stat(%d)", xid);
 			return -1;
 		}
-		
+
 		LIMIT[i].min = sb.minimum;
 		LIMIT[i].cur = sb.value;
 		LIMIT[i].max = sb.maximum;
 	}
-	
+
 	return 0;
 }
 
@@ -89,7 +89,7 @@ int limit_rrd_create(char *path)
 
 	char timestr[32];
 	time_t curtime = time(NULL);
-	
+
 	char *argv[] = {
 		"create", path, "-b", timestr, "-s", STEP_STR,
 		"DS:min:GAUGE:" STEP_STR ":0:9223372036854775807",
@@ -97,22 +97,22 @@ int limit_rrd_create(char *path)
 		"DS:max:GAUGE:" STEP_STR ":0:9223372036854775807",
 		RRA_DEFAULT
 	};
-	
+
 	int argc = sizeof(argv) / sizeof(*argv);
-	
+
 	snprintf(timestr, 32, "%ld", curtime - STEP - (curtime % STEP));
-	
+
 	if (mkdirnamep(path, 0700) == -1) {
 		log_perror("mkdirnamep(%s)", path);
 		return -1;
 	}
-	
+
 	if (rrd_create(argc, argv) == -1) {
 		log_error("rrd_create(%s): %s", path, rrd_get_error());
 		rrd_clear_error();
 		return -1;
 	}
-	
+
 	return 0;
 }
 
@@ -122,20 +122,20 @@ int limit_rrd_check(char *name)
 
 	const char *datadir = cfg_getstr(cfg, "datadir");
 	int i;
-	
+
 	for (i = 0; LIMIT[i].db; i++) {
 		char *path = NULL;
-		
+
 		asprintf(&path, "%s/%s/%s.rrd", datadir, name, LIMIT[i].db);
-		
+
 		if (!isfile(path) && limit_rrd_create(path) == -1) {
 			mem_free(path);
 			return -1;
 		}
-		
+
 		mem_free(path);
 	}
-	
+
 	return 0;
 }
 
@@ -145,10 +145,10 @@ int limit_rrd_update(char *name, time_t curtime)
 
 	const char *datadir = cfg_getstr(cfg, "datadir");
 	int i;
-	
+
 	for (i = 0; LIMIT[i].db; i++) {
 		char *buf = NULL;
-		
+
 		asprintf(&buf,
 			"update %s/%s/%s.rrd %ld:%" PRIu64 ":%" PRIu64 ":%" PRIu64,
 			datadir,
@@ -158,7 +158,7 @@ int limit_rrd_update(char *name, time_t curtime)
 			LIMIT[i].min,
 			LIMIT[i].cur,
 			LIMIT[i].max);
-		
+
 		strtok_t _st, *st = &_st;
 
 		if (!strtok_init_str(st, buf, " ", 0)) {
@@ -176,7 +176,7 @@ int limit_rrd_update(char *name, time_t curtime)
 			strtok_free(st);
 			return -1;
 		}
-	
+
 		if (strtok_toargv(st, argv) < 1) {
 			strtok_free(st);
 			return -1;
@@ -188,6 +188,6 @@ int limit_rrd_update(char *name, time_t curtime)
 			return -1;
 		}
 	}
-	
+
 	return 0;
 }

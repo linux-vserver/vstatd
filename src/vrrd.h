@@ -57,7 +57,7 @@ time_t vrrd_align_time(time_t curtime)
 	LOG_TRACEME
 
 	int rest = curtime % STEP;
-	
+
 	if (rest > (STEP / 2))
 		return (curtime + STEP - rest);
 	else

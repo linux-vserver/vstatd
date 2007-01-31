@@ -65,24 +65,24 @@ void handle_xid(xid_t xid)
 	LOG_TRACEME
 
 	time_t cacct_time, cvirt_time, limit_time, loadavg_time;
-	
+
 	if (cacct_parse(xid, &cacct_time) == -1 ||
 	    cvirt_parse(xid, &cvirt_time) == -1 ||
 	    limit_parse(xid, &limit_time) == -1 ||
 	    loadavg_parse(xid, &loadavg_time) == -1)
 		return;
-	
+
 	vx_uname_t uname;
 	uname.id = VHIN_CONTEXT;
-	
+
 	if (vx_uname_get(xid, &uname) == -1) {
 		log_perror("vx_uname_get(%d)", xid);
 		return;
 	}
-	
+
 	char *name = uname.value;
 	char *p = str_chr(name, ':', str_len(name));
-	
+
 	if (p)
 		*p = '\0';
 
@@ -91,7 +91,7 @@ void handle_xid(xid_t xid)
 	    limit_rrd_check(name) == -1 ||
 	    loadavg_rrd_check(name) == -1)
 		return;
-	
+
 	if (cacct_rrd_update(name, cacct_time) == -1 ||
 	    cvirt_rrd_update(name, cvirt_time) == -1 ||
 	    limit_rrd_update(name, limit_time) == -1 ||
@@ -105,23 +105,23 @@ void read_proc(void)
 	LOG_TRACEME
 
 	DIR *dirp;
-	
+
 	if ((dirp = opendir("/proc/virtual")) == NULL) {
 		log_perror("opendir(/proc/virtual)");
 		return;
 	}
-	
+
 	struct dirent *ditp;
 	xid_t xid = -1;
-	
+
 	while ((ditp = readdir(dirp)) != NULL) {
 		if (!str_isdigit(ditp->d_name))
 			continue;
-		
+
 		sscanf(ditp->d_name, "%" SCNu32, &xid);
 		handle_xid(xid);
 	}
-	
+
 	closedir(dirp);
 	return;
 }
@@ -162,36 +162,36 @@ int main(int argc, char **argv)
 		case 'c':
 			cfg_file = optarg;
 			break;
-		
+
 		case 'd':
 			debug = 1;
 			break;
-		
+
 		default:
 			usage(EXIT_FAILURE);
 			break;
 		}
 	}
-	
+
 	if (argc > optind)
 		usage(EXIT_FAILURE);
-	
+
 	/* load configuration */
 	cfg = cfg_init(CFG_OPTS, CFGF_NOCASE);
-	
+
 	switch (cfg_parse(cfg, cfg_file)) {
 	case CFG_FILE_ERROR:
 		dprintf(STDERR_FILENO, "cfg_parse: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
-	
+
 	case CFG_PARSE_ERROR:
 		dprintf(STDERR_FILENO, "cfg_parse: Parse error\n");
 		exit(EXIT_FAILURE);
-	
+
 	default:
 		break;
 	}
-	
+
 	/* free configuration on exit */
 	atexit(cfg_atexit);
 
@@ -268,6 +268,6 @@ int main(int argc, char **argv)
 		read_proc();
 		sleep(30);
 	}
-	
+
 	exit(EXIT_SUCCESS);
 }
