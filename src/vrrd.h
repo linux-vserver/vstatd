@@ -21,6 +21,8 @@
 #include <time.h>
 #include <vserver.h>
 
+#include <lucid/log.h>
+
 #define STEP      30
 #define STEP_STR "30"
 
