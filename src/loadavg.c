@@ -15,66 +15,38 @@
 // Free Software Foundation, Inc.,
 // 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <unistd.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
 #include <inttypes.h>
 #include <rrd.h>
-#include <lucid/argv.h>
-#include <lucid/io.h>
-#include <lucid/misc.h>
-#include <lucid/open.h>
 
 #include "cfg.h"
-#include "log.h"
-#include "proc.h"
 #include "vrrd.h"
 
-static float LOADAVG[3];
+#define _LUCID_PRINTF_MACROS
+#include <lucid/log.h>
+#include <lucid/mem.h>
+#include <lucid/misc.h>
+#include <lucid/printf.h>
+#include <lucid/strtok.h>
 
-#define CVIRT_PATH_FMT  PROC_VIRTUAL_XID_FMT "/cvirt"
-#define CVIRT_PATH_MAX  PROC_VIRTUAL_XID_MAX + 6
+static uint32_t LOADAVG[3];
 
 int loadavg_parse(xid_t xid, time_t *curtime)
 {
-	char cvirt_path[CVIRT_PATH_MAX];
-	char *buf, *p;
-	int fd, ok = 0;
-	float a, b, c;
-	
-	snprintf(cvirt_path, CVIRT_PATH_MAX, CVIRT_PATH_FMT, xid);
-	
-	if ((fd = open_read(cvirt_path)) == -1)
-		return -1;
-	
+	LOG_TRACEME
+
 	if (curtime)
 		*curtime = time(NULL);
 	
-	if (io_read_eof(fd, &buf) == -1)
+	vx_stat_t sb;
+	
+	if (vx_stat(xid, &sb) == -1) {
+		log_perror("vx_stat(%d)", xid);
 		return -1;
-	
-	close(fd);
-	
-	while ((p = strsep(&buf, "\n"))) {
-		if (sscanf(p, "loadavg: %f %f %f", &a, &b, &c) == 3) {
-			LOADAVG[0] = a;
-			LOADAVG[1] = b;
-			LOADAVG[2] = c;
-			ok = 1;
-		}
 	}
 	
-	if (!ok) {
-		log_warn("no valid loadavg in %s", cvirt_path);
-		LOADAVG[0] = -1;
-		LOADAVG[1] = -1;
-		LOADAVG[2] = -1;
-	}
+	LOADAVG[0] = sb.load[0];
+	LOADAVG[1] = sb.load[1];
+	LOADAVG[2] = sb.load[2];
 	
 	return 0;
 }
@@ -82,6 +54,8 @@ int loadavg_parse(xid_t xid, time_t *curtime)
 static
 int loadavg_rrd_create(char *path)
 {
+	LOG_TRACEME
+
 	char timestr[32];
 	time_t curtime = time(NULL);
 	
@@ -98,7 +72,7 @@ int loadavg_rrd_create(char *path)
 	snprintf(timestr, 32, "%ld", curtime - STEP - (curtime % STEP));
 	
 	if (mkdirnamep(path, 0700) == -1) {
-		log_error("mkdirnamep(%s): %s", path, strerror(errno));
+		log_perror("mkdirnamep(%s)", path);
 		return -1;
 	}
 	
@@ -113,30 +87,29 @@ int loadavg_rrd_create(char *path)
 
 int loadavg_rrd_check(char *name)
 {
-	const char *datadir;
-	char *path;
-	
-	datadir = cfg_getstr(cfg, "datadir");
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");;
+	char *path = NULL;
 	
 	asprintf(&path, "%s/%s/sys_LOADAVG.rrd", datadir, name);
 	
 	if (!isfile(path) && loadavg_rrd_create(path) == -1) {
-		free(path);
+		mem_free(path);
 		return -1;
 	}
 	
-	free(path);
+	mem_free(path);
 	
 	return 0;
 }
 
 int loadavg_rrd_update(char *name, time_t curtime)
 {
-	const char *datadir;
-	int argc;
-	char *buf, *argv[4];
-	
-	datadir = cfg_getstr(cfg, "datadir");
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");
+	char *buf = NULL;
 	
 	asprintf(&buf,
 		"update %s/%s/sys_LOADAVG.rrd %ld:%f:%f:%f",
@@ -147,8 +120,29 @@ int loadavg_rrd_update(char *name, time_t curtime)
 		LOADAVG[1],
 		LOADAVG[2]);
 	
-	argc = argv_from_str(buf, argv, 4);
-	
+	strtok_t _st, *st = &_st;
+
+	if (!strtok_init_str(st, buf, " ", 0)) {
+		mem_free(buf);
+		return -1;
+	}
+
+	mem_free(buf);
+
+	int argc    = strtok_count(st);
+	char **argv = mem_alloc((argc + 1) * sizeof(char *));
+
+	if (!argv) {
+		mem_free(argv);
+		strtok_free(st);
+		return -1;
+	}
+
+	if (strtok_toargv(st, argv) < 1) {
+		strtok_free(st);
+		return -1;
+	}
+
 	if (rrd_update(argc, argv) == -1) {
 		log_error("rrd_update(%s): %s", name, rrd_get_error());
 		rrd_clear_error();

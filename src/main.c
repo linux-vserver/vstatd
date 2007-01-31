@@ -15,25 +15,27 @@
 // Free Software Foundation, Inc.,
 // 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <stdlib.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <string.h>
-#include <getopt.h>
-#include <sys/stat.h>
+#include <signal.h>
 #include <dirent.h>
-#include <lucid/open.h>
-#include <lucid/str.h>
-#include <vserver.h>
+#include <syslog.h>
+#include <sys/stat.h>
 
 #include "cfg.h"
-#include "log.h"
-#include "proc.h"
 #include "vrrd.h"
+
+#define _LUCID_PRINTF_MACROS
+#define _LUCID_SCANF_MACROS
+#include <lucid/log.h>
+#include <lucid/mem.h>
+#include <lucid/open.h>
+#include <lucid/printf.h>
+#include <lucid/scanf.h>
+#include <lucid/str.h>
 
 static cfg_opt_t CFG_OPTS[] = {
 	CFG_STR("logfile", NULL, CFGF_NONE),
@@ -60,9 +62,9 @@ void usage (int rc)
 static
 void handle_xid(xid_t xid)
 {
+	LOG_TRACEME
+
 	time_t cacct_time, cvirt_time, limit_time, loadavg_time;
-	char *name;
-	vx_uname_t uname;
 	
 	if (cacct_parse(xid, &cacct_time) == -1 ||
 	    cvirt_parse(xid, &cvirt_time) == -1 ||
@@ -70,20 +72,19 @@ void handle_xid(xid_t xid)
 	    loadavg_parse(xid, &loadavg_time) == -1)
 		return;
 	
+	vx_uname_t uname;
 	uname.id = VHIN_CONTEXT;
 	
 	if (vx_uname_get(xid, &uname) == -1) {
-		log_error("vx_uname_get(%d): %s", xid, strerror(errno));
+		log_perror("vx_uname_get(%d)", xid);
 		return;
 	}
 	
-	/* For util-vserver guests */
-	if (uname.value[0] == '/')
-		name = strrchr(uname.value, '/') + 1;
+	char *name = uname.value;
+	char *p = str_chr(name, ':', str_len(name));
 	
-	/* For vserver-utils guests */
-	else
-		name = uname.value;
+	if (p)
+		*p = '\0';
 
 	if (cacct_rrd_check(name) == -1 ||
 	    cvirt_rrd_check(name) == -1 ||
@@ -101,20 +102,23 @@ void handle_xid(xid_t xid)
 static
 void read_proc(void)
 {
+	LOG_TRACEME
+
 	DIR *dirp;
-	struct dirent *ditp;
-	xid_t xid;
 	
-	if ((dirp = opendir(PROC_VIRTUAL)) == NULL) {
-		log_error("opendir(%s): %s", PROC_VIRTUAL, strerror(errno));
+	if ((dirp = opendir("/proc/virtual")) == NULL) {
+		log_perror("opendir(/proc/virtual)");
 		return;
 	}
+	
+	struct dirent *ditp;
+	xid_t xid = -1;
 	
 	while ((ditp = readdir(dirp)) != NULL) {
 		if (!str_isdigit(ditp->d_name))
 			continue;
 		
-		xid = atoi(ditp->d_name);
+		sscanf(ditp->d_name, "%" SCNu32, &xid);
 		handle_xid(xid);
 	}
 	
@@ -122,13 +126,36 @@ void read_proc(void)
 	return;
 }
 
-int main (int argc, char *argv[]) {
-	char *cfg_file = SYSCONFDIR "/vstatd.conf";
-	
-	char c, *pidfile = NULL;
-	int fd, debug = 0;
-	pid_t pid;
-	
+static
+void sigsegv_handler(int sig, siginfo_t *info, void *ucontext)
+{
+	log_error("Received SIGSEGV for virtual address %p (%d,%d)",
+			info->si_addr, info->si_errno, info->si_code);
+
+	log_error("You probably found a bug in vstatd!");
+	log_error("Please report it to hollow@gentoo.org");
+
+	exit(EXIT_FAILURE);
+}
+
+int main(int argc, char **argv)
+{
+	char *cfg_file = SYSCONFDIR "/vcd.conf";
+	int c, debug = 0;
+
+	/* install SIGSEGV handler */
+	struct sigaction sa;
+
+	sa.sa_sigaction = sigsegv_handler;
+	sa.sa_flags = SA_RESETHAND|SA_SIGINFO;
+
+	sigfillset(&sa.sa_mask);
+
+	if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+		dprintf(STDERR_FILENO, "sigaction: %s", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
 	/* parse command line */
 	while ((c = getopt(argc, argv, "dc:")) != -1) {
 		switch (c) {
@@ -154,7 +181,7 @@ int main (int argc, char *argv[]) {
 	
 	switch (cfg_parse(cfg, cfg_file)) {
 	case CFG_FILE_ERROR:
-		perror("cfg_parse");
+		dprintf(STDERR_FILENO, "cfg_parse: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	
 	case CFG_PARSE_ERROR:
@@ -165,47 +192,78 @@ int main (int argc, char *argv[]) {
 		break;
 	}
 	
+	/* free configuration on exit */
+	atexit(cfg_atexit);
+
+	/* free all memory on exit */
+	atexit(mem_freeall);
+
 	/* start logging & debugging */
-	if (log_init(debug) == -1) {
-		perror("log_init");
-		exit(EXIT_FAILURE);
+	log_options_t log_options = {
+		.ident  = argv[0],
+		.file   = false,
+		.stderr = false,
+		.syslog = true,
+		.time   = true,
+		.flags  = LOG_PID,
+	};
+
+	const char *logfile = cfg_getstr(cfg, "logfile");
+
+	if (logfile && str_len(logfile) > 0) {
+		log_options.file = true;
+		log_options.fd   = open_append(logfile);
 	}
-	
+
+	if (debug) {
+		log_options.stderr = true;
+		log_options.mask   = LOG_UPTO(LOG_DEBUG);
+	}
+
+	log_init(&log_options);
+
+	/* close log multiplexer on exit */
+	atexit(log_close);
+
 	/* fork to background */
 	if (!debug) {
-		pid = fork();
-		
+		log_info("Running in background mode ...");
+
+		pid_t pid = fork();
+
 		switch (pid) {
 		case -1:
-			log_error_and_die("fork: %s", strerror(errno));
-		
+			log_perror_and_die("fork");
+
 		case 0:
 			break;
-		
+
 		default:
 			exit(EXIT_SUCCESS);
 		}
-		
+
 		close(STDOUT_FILENO);
 		close(STDERR_FILENO);
 	}
-	
+
+	else
+		log_info("Running in debugging mode ...");
+
 	/* daemonize */
 	close(STDIN_FILENO);
 	umask(0);
 	setsid();
 	chdir("/");
-	
+
 	/* log process id */
-	pidfile = cfg_getstr(cfg, "pidfile");
-	
+	int fd;
+	const char *pidfile = cfg_getstr(cfg, "pidfile");
+
 	if (pidfile && (fd = open_trunc(pidfile)) != -1) {
 		dprintf(fd, "%d\n", getpid());
 		close(fd);
 	}
-	
-	log_info("Starting vstatd with config file: %s", cfg_file);
-	
+
 	while (1) {
 		read_proc();
 		sleep(30);

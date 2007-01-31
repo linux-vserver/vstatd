@@ -17,25 +17,34 @@
 
 #include <sys/stat.h>
 
+#include <lucid/log.h>
 #include <lucid/str.h>
 
 #include "cfg.h"
 
+void cfg_atexit(void)
+{
+	LOG_TRACEME
+	cfg_free(cfg);
+}
+
 int cfg_validate_path(cfg_t *cfg, cfg_opt_t *opt,
                       const char *value, void *result)
 {
+	LOG_TRACEME
+
 	struct stat sb;
-	
+
 	if (!str_path_isabs(value)) {
 		cfg_error(cfg, "Invalid absolute path for %s = '%s'", opt->name, value);
 		return -1;
 	}
-	
+
 	if (lstat(value, &sb) == -1) {
 		cfg_error(cfg, "File does not exist for %s = '%s'", opt->name, value);
 		return -1;
 	}
-	
+
 	*(const char **) result = (const char *) value;
 	return 0;
 }

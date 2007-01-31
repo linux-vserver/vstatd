@@ -15,90 +15,68 @@
 // Free Software Foundation, Inc.,
 // 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <unistd.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
 #include <inttypes.h>
 #include <rrd.h>
-#include <lucid/argv.h>
-#include <lucid/io.h>
-#include <lucid/misc.h>
-#include <lucid/open.h>
+#include <sys/resource.h>
 
 #include "cfg.h"
-#include "log.h"
-#include "proc.h"
 #include "vrrd.h"
+
+#define _LUCID_PRINTF_MACROS
+#include <lucid/log.h>
+#include <lucid/mem.h>
+#include <lucid/misc.h>
+#include <lucid/printf.h>
+#include <lucid/strtok.h>
 
 static
 struct limit_data {
+	int id;
 	char *db;
-	char *token;
 	uint64_t min, cur, max;
 } LIMIT[] = {
-	{ "file_FILES", "FILES:", 0, 0, 0 },
-	{ "file_OFD",   "OFD:",   0, 0, 0 },
-	{ "file_LOCKS", "LOCKS:", 0, 0, 0 },
-	{ "file_SOCK",  "SOCK:",  0, 0, 0 },
-	{ "file_DENT",  "DENT:",  0, 0, 0 },
-	{ "ipc_MSGQ",   "MSGQ:",  0, 0, 0 },
-	{ "ipc_SHM",    "SHM:",   0, 0, 0 },
-	{ "ipc_SEMA",   "SEMA:",  0, 0, 0 },
-	{ "ipc_SEMS",   "SEMS:",  0, 0, 0 },
-	{ "mem_VM",     "VM:",    0, 0, 0 },
-	{ "mem_VML",    "VML:",   0, 0, 0 },
-	{ "mem_RSS",    "RSS:",   0, 0, 0 },
-	{ "mem_ANON",   "ANON:",  0, 0, 0 },
-	{ "sys_PROC",   "PROC:",  0, 0, 0 },
-	{ NULL,         NULL,     0, 0, 0 }
+	{ RLIMIT_NOFILE,   "file_FILES", 0, 0, 0 },
+	{ VLIMIT_OPENFD,   "file_OFD",   0, 0, 0 },
+	{ RLIMIT_LOCKS,    "file_LOCKS", 0, 0, 0 },
+	{ VLIMIT_NSOCK,    "file_SOCK",  0, 0, 0 },
+	{ VLIMIT_DENTRY,   "file_DENT",  0, 0, 0 },
+	{ RLIMIT_MSGQUEUE, "ipc_MSGQ",   0, 0, 0 },
+	{ VLIMIT_SHMEM,    "ipc_SHM",    0, 0, 0 },
+	{ VLIMIT_SEMARY,   "ipc_SEMA",   0, 0, 0 },
+	{ VLIMIT_NSEMS,    "ipc_SEMS",   0, 0, 0 },
+	{ RLIMIT_AS,       "mem_VM",     0, 0, 0 },
+	{ RLIMIT_MEMLOCK,  "mem_VML",    0, 0, 0 },
+	{ RLIMIT_RSS,      "mem_RSS",    0, 0, 0 },
+	{ VLIMIT_ANON,     "mem_ANON",   0, 0, 0 },
+	{ RLIMIT_NPROC,    "sys_PROC",   0, 0, 0 },
+	{ 0,               NULL,         0, 0, 0 }
 };
-
-#define LIMIT_PATH_FMT  PROC_VIRTUAL_XID_FMT "/limit"
-#define LIMIT_PATH_MAX  PROC_VIRTUAL_XID_MAX + 6
 
 int limit_parse(xid_t xid, time_t *curtime)
 {
-	char limit_path[LIMIT_PATH_MAX + 1];
-	char *buf, *p, *token;
-	int i, fd;
-	uint64_t min, cur, max;
-	
-	
-	snprintf(limit_path, LIMIT_PATH_MAX, LIMIT_PATH_FMT, xid);
-	
-	if ((fd = open_read(limit_path)) == -1)
-		return -1;
-	
+	LOG_TRACEME
+
 	if (curtime)
 		*curtime = time(NULL);
 	
-	if (io_read_eof(fd, &buf) == -1)
-		return -1;
-	
-	close(fd);
-	
 	if (vx_limit_reset(xid) == -1)
-		log_warn("vx_reset_rlimit(%d): %s", xid, strerror(errno));
+		log_pwarn("vx_reset_rlimit(%d)", xid);
 	
-	while ((p = strsep(&buf, "\n"))) {
-		token = malloc(strlen(p));
+	int i;
+	
+	for (i = 0; LIMIT[i].db; i++) {
+		vx_limit_stat_t sb;
 		
-		if (sscanf(p, "%s %" SCNu64 " %" SCNu64 " %*c %" SCNu64,
-		           token, &cur, &min, &max) == 4) {
-			for (i = 0; LIMIT[i].db; i++)
-				if (strcmp(token, LIMIT[i].token) == 0) {
-					LIMIT[i].min = min;
-					LIMIT[i].cur = cur;
-					LIMIT[i].max = max;
-				}
+		sb.id = LIMIT[i].id;
+		
+		if (vx_limit_stat(xid, &sb) == -1) {
+			log_perror("x_limit_stat(%d)", xid);
+			return -1;
 		}
 		
-		free(token);
+		LIMIT[i].min = sb.minimum;
+		LIMIT[i].cur = sb.value;
+		LIMIT[i].max = sb.maximum;
 	}
 	
 	return 0;
@@ -107,6 +85,8 @@ int limit_parse(xid_t xid, time_t *curtime)
 static
 int limit_rrd_create(char *path)
 {
+	LOG_TRACEME
+
 	char timestr[32];
 	time_t curtime = time(NULL);
 	
@@ -123,7 +103,7 @@ int limit_rrd_create(char *path)
 	snprintf(timestr, 32, "%ld", curtime - STEP - (curtime % STEP));
 	
 	if (mkdirnamep(path, 0700) == -1) {
-		log_error("mkdirnamep(%s): %s", path, strerror(errno));
+		log_perror("mkdirnamep(%s)", path);
 		return -1;
 	}
 	
@@ -138,21 +118,22 @@ int limit_rrd_create(char *path)
 
 int limit_rrd_check(char *name)
 {
-	const char *datadir;
-	char *path;
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");
 	int i;
 	
-	datadir = cfg_getstr(cfg, "datadir");
-	
 	for (i = 0; LIMIT[i].db; i++) {
+		char *path = NULL;
+		
 		asprintf(&path, "%s/%s/%s.rrd", datadir, name, LIMIT[i].db);
 		
 		if (!isfile(path) && limit_rrd_create(path) == -1) {
-			free(path);
+			mem_free(path);
 			return -1;
 		}
 		
-		free(path);
+		mem_free(path);
 	}
 	
 	return 0;
@@ -160,13 +141,14 @@ int limit_rrd_check(char *name)
 
 int limit_rrd_update(char *name, time_t curtime)
 {
-	const char *datadir;
-	int i, argc;
-	char *buf, *argv[4];
-	
-	datadir = cfg_getstr(cfg, "datadir");
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");
+	int i;
 	
 	for (i = 0; LIMIT[i].db; i++) {
+		char *buf = NULL;
+		
 		asprintf(&buf,
 			"update %s/%s/%s.rrd %ld:%" PRIu64 ":%" PRIu64 ":%" PRIu64,
 			datadir,
@@ -177,8 +159,29 @@ int limit_rrd_update(char *name, time_t curtime)
 			LIMIT[i].cur,
 			LIMIT[i].max);
 		
-		argc = argv_from_str(buf, argv, 4);
-		
+		strtok_t _st, *st = &_st;
+
+		if (!strtok_init_str(st, buf, " ", 0)) {
+			mem_free(buf);
+			return -1;
+		}
+
+		mem_free(buf);
+
+		int argc    = strtok_count(st);
+		char **argv = mem_alloc((argc + 1) * sizeof(char *));
+
+		if (!argv) {
+			mem_free(argv);
+			strtok_free(st);
+			return -1;
+		}
+	
+		if (strtok_toargv(st, argv) < 1) {
+			strtok_free(st);
+			return -1;
+		}
+
 		if (rrd_update(argc, argv) == -1) {
 			log_error("rrd_update(%s): %s", name, rrd_get_error());
 			rrd_clear_error();

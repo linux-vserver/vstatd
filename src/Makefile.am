@@ -20,8 +20,6 @@ EXTRA_DIST = vstatd.conf
 AM_CPPFLAGS = $(PATH_CPPFLAGS)
 
 noinst_HEADERS = cfg.h \
-                 log.h \
-                 proc.h \
                  vrrd.h
 
 sbin_PROGRAMS = vstatd
@@ -31,7 +29,6 @@ vstatd_SOURCES = cacct.c \
                  cvirt.c \
                  limit.c \
                  loadavg.c \
-                 log.c \
                  main.c
 
 vstatd_LDADD = $(CONFUSE_LIBS) \

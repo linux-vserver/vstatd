@@ -15,71 +15,54 @@
 // Free Software Foundation, Inc.,
 // 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <unistd.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
 #include <inttypes.h>
 #include <rrd.h>
-#include <lucid/argv.h>
-#include <lucid/io.h>
-#include <lucid/misc.h>
-#include <lucid/open.h>
 
 #include "cfg.h"
-#include "log.h"
-#include "proc.h"
 #include "vrrd.h"
+
+#define _LUCID_PRINTF_MACROS
+#include <lucid/log.h>
+#include <lucid/mem.h>
+#include <lucid/misc.h>
+#include <lucid/printf.h>
+#include <lucid/strtok.h>
 
 static
 struct cvirt_data {
 	char *db;
-	char *token;
 	int value;
 } CVIRT[] = {
-	{ "thread_TOTAL",   "nr_threads:", 0 },
-	{ "thread_RUNNING", "nr_running:", 0 },
-	{ "thread_UNINTR",  "nr_unintr:",  0 },
-	{ "thread_ONHOLD",  "nr_onhold:",  0 },
-	{ NULL,             NULL,          0 }
+	{ "thread_TOTAL",   0 },
+	{ "thread_RUNNING", 0 },
+	{ "thread_UNINTR",  0 },
+	{ "thread_ONHOLD",  0 },
+	{ NULL,             0 }
 };
-
-#define CVIRT_PATH_FMT  PROC_VIRTUAL_XID_FMT "/cvirt"
-#define CVIRT_PATH_MAX  PROC_VIRTUAL_XID_MAX + 6
 
 int cvirt_parse(xid_t xid, time_t *curtime)
 {
-	char cvirt_path[CVIRT_PATH_MAX + 1];
-	char *buf, *p, *token;
-	int i, fd, value;
-	
-	snprintf(cvirt_path, CVIRT_PATH_MAX, CVIRT_PATH_FMT, xid);
-	
-	if ((fd = open_read(cvirt_path)) == -1)
-		return -1;
-	
+	LOG_TRACEME
+
 	if (curtime)
 		*curtime = time(NULL);
 	
-	if (io_read_eof(fd, &buf) == -1)
-		return -1;
+	int i;
 	
-	close(fd);
-	
-	while ((p = strsep(&buf, "\n"))) {
-		token = malloc(strlen(p));
+	for (i = 0; CVIRT[i].db; i++) {
+		vx_stat_t sb;
 		
-		if (sscanf(p, "%s %d", token, &value) == 2) {
-			for (i = 0; CVIRT[i].db; i++)
-				if (strcmp(token, CVIRT[i].token) == 0)
-					CVIRT[i].value = value;
+		if (vx_stat(xid, &sb) == -1) {
+			log_perror("vx_stat(%d)", xid);
+			return -1;
 		}
 		
-		free(token);
+		switch (i) {
+			case 0: CVIRT[i].value = sb.nr_threads; break;
+			case 1: CVIRT[i].value = sb.nr_running; break;
+			case 2: CVIRT[i].value = sb.nr_unintr; break;
+			case 3: CVIRT[i].value = sb.nr_onhold; break;
+		}
 	}
 	
 	return 0;
@@ -88,6 +71,8 @@ int cvirt_parse(xid_t xid, time_t *curtime)
 static
 int cvirt_rrd_create(char *path)
 {
+	LOG_TRACEME
+
 	char timestr[32];
 	time_t curtime = time(NULL);
 	
@@ -102,7 +87,7 @@ int cvirt_rrd_create(char *path)
 	snprintf(timestr, 32, "%ld", curtime - STEP - (curtime % STEP));
 	
 	if (mkdirnamep(path, 0700) == -1) {
-		log_error("mkdirnamep(%s): %s", path, strerror(errno));
+		log_perror("mkdirnamep(%s)", path);
 		return -1;
 	}
 	
@@ -117,21 +102,22 @@ int cvirt_rrd_create(char *path)
 
 int cvirt_rrd_check(char *name)
 {
-	const char *datadir;
-	char *path;
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");
 	int i;
 	
-	datadir = cfg_getstr(cfg, "datadir");
-	
 	for (i = 0; CVIRT[i].db; i++) {
+		char *path = NULL;
+		
 		asprintf(&path, "%s/%s/%s.rrd", datadir, name, CVIRT[i].db);
 		
 		if (!isfile(path) && cvirt_rrd_create(path) == -1) {
-			free(path);
+			mem_free(path);
 			return -1;
 		}
 		
-		free(path);
+		mem_free(path);
 	}
 	
 	return 0;
@@ -139,13 +125,14 @@ int cvirt_rrd_check(char *name)
 
 int cvirt_rrd_update(char *name, time_t curtime)
 {
-	const char *datadir;
-	int i, argc;
-	char *buf, *argv[4];
-	
-	datadir = cfg_getstr(cfg, "datadir");
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");
+	int i;
 	
 	for (i = 0; CVIRT[i].db; i++) {
+		char *buf = NULL;
+		
 		asprintf(&buf,
 			"update %s/%s/%s.rrd %ld:%d",
 			datadir,
@@ -154,7 +141,28 @@ int cvirt_rrd_update(char *name, time_t curtime)
 			vrrd_align_time(curtime),
 			CVIRT[i].value);
 		
-		argc = argv_from_str(buf, argv, 4);
+		strtok_t _st, *st = &_st;
+
+		if (!strtok_init_str(st, buf, " ", 0)) {
+			mem_free(buf);
+			return -1;
+		}
+
+		mem_free(buf);
+
+		int argc    = strtok_count(st);
+		char **argv = mem_alloc((argc + 1) * sizeof(char *));
+
+		if (!argv) {
+			mem_free(argv);
+			strtok_free(st);
+			return -1;
+		}
+	
+		if (strtok_toargv(st, argv) < 1) {
+			strtok_free(st);
+			return -1;
+		}
 		
 		if (rrd_update(argc, argv) == -1) {
 			log_error("rrd_update(%s): %s", name, rrd_get_error());

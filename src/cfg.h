@@ -22,6 +22,8 @@
 
 extern cfg_t *cfg;
 
+void cfg_atexit(void);
+
 int cfg_validate_path(cfg_t *cfg, cfg_opt_t *opt,
                       const char *value, void *result);
 

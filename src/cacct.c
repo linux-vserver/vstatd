@@ -15,87 +15,60 @@
 // Free Software Foundation, Inc.,
 // 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-#ifdef HAVE_CONFIG_H
-#include <config.h>
-#endif
-
-#include <unistd.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
 #include <inttypes.h>
 #include <rrd.h>
-#include <lucid/argv.h>
-#include <lucid/io.h>
-#include <lucid/misc.h>
-#include <lucid/open.h>
 
 #include "cfg.h"
-#include "log.h"
-#include "proc.h"
 #include "vrrd.h"
+
+#define _LUCID_PRINTF_MACROS
+#include <lucid/log.h>
+#include <lucid/mem.h>
+#include <lucid/misc.h>
+#include <lucid/printf.h>
+#include <lucid/strtok.h>
 
 static
 struct cacct_data {
+	uint32_t id;
 	char *db;
-	char *token;
 	uint64_t recvp, recvb;
 	uint64_t sendp, sendb;
 	uint64_t failp, failb;
 } CACCT[] = {
-	{ "net_UNSPEC", "UNSPEC:", 0, 0, 0, 0, 0, 0 },
-	{ "net_UNIX",   "UNIX:",   0, 0, 0, 0, 0, 0 },
-	{ "net_INET",   "INET:",   0, 0, 0, 0, 0, 0 },
-	{ "net_INET6",  "INET6:",  0, 0, 0, 0, 0, 0 },
-	{ "net_OTHER",  "OTHER:",  0, 0, 0, 0, 0, 0 },
-	{ NULL,         NULL,      0, 0, 0, 0, 0, 0 }
+	{ NXA_SOCK_UNSPEC, "net_UNSPEC", 0, 0, 0, 0, 0, 0 },
+	{ NXA_SOCK_UNIX,   "net_UNIX",   0, 0, 0, 0, 0, 0 },
+	{ NXA_SOCK_INET,   "net_INET",   0, 0, 0, 0, 0, 0 },
+	{ NXA_SOCK_INET6,  "net_INET6",  0, 0, 0, 0, 0, 0 },
+	{ NXA_SOCK_OTHER,  "net_OTHER",  0, 0, 0, 0, 0, 0 },
+	{ 0,               NULL,         0, 0, 0, 0, 0, 0 }
 };
-
-#define CACCT_PATH_FMT  PROC_VIRTUAL_XID_FMT "/cacct"
-#define CACCT_PATH_MAX  PROC_VIRTUAL_XID_MAX + 6
 
 int cacct_parse(xid_t xid, time_t *curtime)
 {
-	char cacct_path[CACCT_PATH_MAX + 1];
-	char *buf, *p, *token;
-	int i, fd;
-	uint64_t recvp, recvb;
-	uint64_t sendp, sendb;
-	uint64_t failp, failb;
-	
-	snprintf(cacct_path, CACCT_PATH_MAX, CACCT_PATH_FMT, xid);
-	
-	if ((fd = open_read(cacct_path)) == -1)
-		return -1;
-	
+	LOG_TRACEME
+
 	if (curtime)
 		*curtime = time(NULL);
 	
-	if (io_read_eof(fd, &buf) == -1)
-		return -1;
+	int i;
 	
-	close(fd);
-	
-	while ((p = strsep(&buf, "\n"))) {
-		token = malloc(strlen(p));
+	for (i = 0; CACCT[i].db; i++) {
+		nx_sock_stat_t sb;
 		
-		if (sscanf(p, "%s %" SCNu64 " %*c %" SCNu64
-		                " %" SCNu64 " %*c %" SCNu64
-		                " %" SCNu64 " %*c %" SCNu64,
-		           token, &recvp, &recvb, &sendp, &sendb, &failp, &failb) == 7) {
-			for (i = 0; CACCT[i].db; i++) {
-				if (strcmp(token, CACCT[i].token) == 0) {
-					CACCT[i].recvp = recvp;
-					CACCT[i].recvb = recvb;
-					CACCT[i].sendp = sendp;
-					CACCT[i].sendb = sendb;
-					CACCT[i].failp = failp;
-					CACCT[i].failb = failb;
-				}
-			}
+		sb.id = CACCT[i].id;
+		
+		if (nx_sock_stat(xid, &sb) == -1) {
+			log_perror("nx_sock_stat(%d)", xid);
+			return -1;
 		}
 		
-		free(token);
+		CACCT[i].recvp = sb.count[0];
+		CACCT[i].recvb = sb.total[0];
+		CACCT[i].sendp = sb.count[1];
+		CACCT[i].sendb = sb.total[1];
+		CACCT[i].failp = sb.count[2];
+		CACCT[i].failb = sb.total[2];
 	}
 	
 	return 0;
@@ -104,6 +77,8 @@ int cacct_parse(xid_t xid, time_t *curtime)
 static
 int cacct_rrd_create(char *path)
 {
+	LOG_TRACEME
+
 	char timestr[32];
 	time_t curtime = time(NULL);
 	
@@ -123,12 +98,12 @@ int cacct_rrd_create(char *path)
 	snprintf(timestr, 32, "%ld", curtime - STEP - (curtime % STEP));
 	
 	if (mkdirnamep(path, 0700) == -1) {
-		log_error("mkdirnamep(%s): %s", path, strerror(errno));
+		log_perror("mkdirnamep(%s)", path);
 		return -1;
 	}
 	
 	if (rrd_create(argc, argv) == -1) {
-		log_error("rrd_create(%s): %s", path, rrd_get_error());
+		log_perror("rrd_create(%s): %s", path, rrd_get_error());
 		rrd_clear_error();
 		return -1;
 	}
@@ -138,21 +113,22 @@ int cacct_rrd_create(char *path)
 
 int cacct_rrd_check(char *name)
 {
-	const char *datadir;
-	char *path;
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");
 	int i;
 	
-	datadir = cfg_getstr(cfg, "datadir");
-	
 	for (i = 0; CACCT[i].db; i++) {
+		char *path = NULL;
+		
 		asprintf(&path, "%s/%s/%s.rrd", datadir, name, CACCT[i].db);
 		
 		if (!isfile(path) && cacct_rrd_create(path) == -1) {
-			free(path);
+			mem_free(path);
 			return -1;
 		}
 		
-		free(path);
+		mem_free(path);
 	}
 	
 	return 0;
@@ -160,13 +136,14 @@ int cacct_rrd_check(char *name)
 
 int cacct_rrd_update(char *name, time_t curtime)
 {
-	const char *datadir;
-	int i, argc;
-	char *buf, *argv[4];
-	
-	datadir = cfg_getstr(cfg, "datadir");
+	LOG_TRACEME
+
+	const char *datadir = cfg_getstr(cfg, "datadir");
+	int i;
 	
 	for (i = 0; CACCT[i].db; i++) {
+		char *buf = NULL;
+		
 		asprintf(&buf,
 			"update %s/%s/%s.rrd %ld"
 			":%" PRIu64 ":%" PRIu64
@@ -183,8 +160,29 @@ int cacct_rrd_update(char *name, time_t curtime)
 			CACCT[i].failp,
 			CACCT[i].failb);
 		
-		argc = argv_from_str(buf, argv, 4);
-		
+		strtok_t _st, *st = &_st;
+
+		if (!strtok_init_str(st, buf, " ", 0)) {
+			mem_free(buf);
+			return -1;
+		}
+
+		mem_free(buf);
+
+		int argc    = strtok_count(st);
+		char **argv = mem_alloc((argc + 1) * sizeof(char *));
+
+		if (!argv) {
+			mem_free(argv);
+			strtok_free(st);
+			return -1;
+		}
+	
+		if (strtok_toargv(st, argv) < 1) {
+			strtok_free(st);
+			return -1;
+		}
+
 		if (rrd_update(argc, argv) == -1) {
 			log_error("rrd_update(%s): %s", name, rrd_get_error());
 			rrd_clear_error();
