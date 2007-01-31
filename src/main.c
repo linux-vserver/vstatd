@@ -140,7 +140,7 @@ void sigsegv_handler(int sig, siginfo_t *info, void *ucontext)
 
 int main(int argc, char **argv)
 {
-	char *cfg_file = SYSCONFDIR "/vcd.conf";
+	char *cfg_file = SYSCONFDIR "/vstatd.conf";
 	int c, debug = 0;
 
 	/* install SIGSEGV handler */
