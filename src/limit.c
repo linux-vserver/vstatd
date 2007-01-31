@@ -35,24 +35,25 @@ struct limit_data {
 	char *db;
 	uint64_t min, cur, max;
 } LIMIT[] = {
-	{ RLIMIT_NOFILE,   "file_FILES", 0, 0, 0 },
-	{ VLIMIT_OPENFD,   "file_OFD",   0, 0, 0 },
-	{ RLIMIT_LOCKS,    "file_LOCKS", 0, 0, 0 },
-	{ VLIMIT_NSOCK,    "file_SOCK",  0, 0, 0 },
-	{ VLIMIT_DENTRY,   "file_DENT",  0, 0, 0 },
-	{ RLIMIT_MSGQUEUE, "ipc_MSGQ",   0, 0, 0 },
-	{ VLIMIT_SHMEM,    "ipc_SHM",    0, 0, 0 },
-	{ VLIMIT_SEMARY,   "ipc_SEMA",   0, 0, 0 },
-	{ VLIMIT_NSEMS,    "ipc_SEMS",   0, 0, 0 },
-	{ RLIMIT_AS,       "mem_VM",     0, 0, 0 },
-	{ RLIMIT_MEMLOCK,  "mem_VML",    0, 0, 0 },
-	{ RLIMIT_RSS,      "mem_RSS",    0, 0, 0 },
-	{ VLIMIT_ANON,     "mem_ANON",   0, 0, 0 },
-	{ RLIMIT_NPROC,    "sys_PROC",   0, 0, 0 },
-	{ 0,               NULL,         0, 0, 0 }
+	{ RLIMIT_AS,       "mem_AS",       0, 0, 0 },
+	{ RLIMIT_LOCKS,    "file_LOCKS",   0, 0, 0 },
+	{ RLIMIT_MEMLOCK,  "mem_MEMLOCK",  0, 0, 0 },
+	{ RLIMIT_MSGQUEUE, "ipc_MSGQUEUE", 0, 0, 0 },
+	{ RLIMIT_NOFILE,   "file_NOFILE",  0, 0, 0 },
+	{ RLIMIT_NPROC,    "sys_NPROC",    0, 0, 0 },
+	{ RLIMIT_RSS,      "mem_RSS",      0, 0, 0 },
+	{ VLIMIT_ANON,     "mem_ANON",     0, 0, 0 },
+	{ VLIMIT_DENTRY,   "file_DENTRY",  0, 0, 0 },
+	{ VLIMIT_MAPPED,   "sys_MAPPED",   0, 0, 0 },
+	{ VLIMIT_NSEMS,    "ipc_NSEMS",    0, 0, 0 },
+	{ VLIMIT_NSOCK,    "file_NSOCK",   0, 0, 0 },
+	{ VLIMIT_OPENFD,   "file_OPENFD",  0, 0, 0 },
+	{ VLIMIT_SEMARY,   "ipc_SEMARY",   0, 0, 0 },
+	{ VLIMIT_SHMEM,    "ipc_SHMEM",    0, 0, 0 },
+	{ 0,               NULL,           0, 0, 0 }
 };
 
-int limit_parse(xid_t xid, time_t *curtime)
+int limit_fetch(xid_t xid, time_t *curtime)
 {
 	LOG_TRACEME
 
@@ -91,10 +92,10 @@ int limit_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", STEP_STR,
-		"DS:min:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:cur:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:max:GAUGE:" STEP_STR ":0:9223372036854775807",
+		"create", path, "-b", timestr, "-s", TOSTR(STEP),
+		"DS:min:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"DS:cur:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"DS:max:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
 		RRA_DEFAULT
 	};
 

@@ -30,7 +30,7 @@
 
 static uint32_t LOADAVG[3];
 
-int loadavg_parse(xid_t xid, time_t *curtime)
+int loadavg_fetch(xid_t xid, time_t *curtime)
 {
 	LOG_TRACEME
 
@@ -60,10 +60,10 @@ int loadavg_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", STEP_STR,
-		"DS:1MIN:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:5MIN:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:15MIN:GAUGE:" STEP_STR ":0:9223372036854775807",
+		"create", path, "-b", timestr, "-s", TOSTR(STEP),
+		"DS:1MIN:GAUGE:"  TOSTR(HEARTBEAT) ":0:" TOSTR(UINT32_MAX),
+		"DS:5MIN:GAUGE:"  TOSTR(HEARTBEAT) ":0:" TOSTR(UINT32_MAX),
+		"DS:15MIN:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT32_MAX),
 		RRA_DEFAULT
 	};
 

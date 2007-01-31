@@ -59,6 +59,55 @@ AC_CHECK_LIB(ucid, str_check,
 
 AC_SUBST(LUCID_LIBS)
 
+AC_ARG_WITH([stepping],
+             AC_HELP_STRING([--with-stepping=N],
+                            [use stepping of N seconds (default is 5)]),
+             [ac_cv_with_stepping=$withval], [ac_cv_with_stepping=5])
+
+AC_DEFINE_UNQUOTED(STEP, $ac_cv_with_stepping)
+
+AC_ARG_WITH([heartbeat],
+             AC_HELP_STRING([--with-heartbeat=N],
+                            [use heartbeat of N seconds (default is 15)]),
+             [ac_cv_with_heartbeat=$withval], [ac_cv_with_heartbeat=15])
+
+AC_DEFINE_UNQUOTED(HEARTBEAT, $ac_cv_with_heartbeat)
+
+AC_ARG_WITH([rows],
+             AC_HELP_STRING([--with-rows=N],
+                            [use N rows in the RRA (default is 360)]),
+             [ac_cv_with_rows=$withval], [ac_cv_with_rows=360])
+
+AC_DEFINE_UNQUOTED(ROWS, $ac_cv_with_rows)
+
+AC_MSG_CHECKING([whether stepping/heartbeat/rows is sane])
+if test $ac_cv_with_stepping -lt 1 -o \
+		$ac_cv_with_heartbeat -lt 1 -o \
+		$ac_cv_with_rows -lt 1 &>/dev/null || test $? -eq 2; then
+	AC_MSG_RESULT([no])
+	AC_MSG_ERROR([Given stepping/heartbeat/rows values are not a number])
+fi
+if test `expr \( $ac_cv_with_stepping \* $ac_cv_with_rows \) % 2` -ne 0; then
+	AC_MSG_RESULT([no])
+	AC_MSG_ERROR([Product of stepping and row is not an even number])
+fi
+if test `expr \( $ac_cv_with_stepping \* $ac_cv_with_rows \)` -lt 1800; then
+	AC_MSG_RESULT([no])
+	AC_MSG_ERROR([Product of stepping and row is smaller than 1800])
+fi
+AC_MSG_RESULT([yes])
+
+AC_DEFINE_UNQUOTED(STEPS30M,
+		`expr 1800 / \( $ac_cv_with_stepping \* $ac_cv_with_rows \)`)
+AC_DEFINE_UNQUOTED(STEPS6H,
+		`expr 21600 / \( $ac_cv_with_stepping \* $ac_cv_with_rows \)`)
+AC_DEFINE_UNQUOTED(STEPS1D,
+		`expr 86400 / \( $ac_cv_with_stepping \* $ac_cv_with_rows \)`)
+AC_DEFINE_UNQUOTED(STEPS30D,
+		`expr 2592000 / \( $ac_cv_with_stepping \* $ac_cv_with_rows \)`)
+AC_DEFINE_UNQUOTED(STEPS1Y,
+		`expr 31536000 / \( $ac_cv_with_stepping \* $ac_cv_with_rows \)`)
+
 # Checks for header files.
 
 # Checks for typedefs, structures, and compiler characteristics.

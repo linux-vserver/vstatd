@@ -40,7 +40,7 @@ struct cvirt_data {
 	{ NULL,             0 }
 };
 
-int cvirt_parse(xid_t xid, time_t *curtime)
+int cvirt_fetch(xid_t xid, time_t *curtime)
 {
 	LOG_TRACEME
 
@@ -77,8 +77,8 @@ int cvirt_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", STEP_STR,
-		"DS:value:GAUGE:" STEP_STR ":0:65535",
+		"create", path, "-b", timestr, "-s", TOSTR(STEP),
+		"DS:value:GAUGE:" TOSTR(HEARTBEAT) ":0:32768",
 		RRA_DEFAULT
 	};
 

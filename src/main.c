@@ -66,10 +66,10 @@ void handle_xid(xid_t xid)
 
 	time_t cacct_time, cvirt_time, limit_time, loadavg_time;
 
-	if (cacct_parse(xid, &cacct_time) == -1 ||
-	    cvirt_parse(xid, &cvirt_time) == -1 ||
-	    limit_parse(xid, &limit_time) == -1 ||
-	    loadavg_parse(xid, &loadavg_time) == -1)
+	if (cacct_fetch(xid, &cacct_time) == -1 ||
+	    cvirt_fetch(xid, &cvirt_time) == -1 ||
+	    limit_fetch(xid, &limit_time) == -1 ||
+	    loadavg_fetch(xid, &loadavg_time) == -1)
 		return;
 
 	vx_uname_t uname;
@@ -266,7 +266,7 @@ int main(int argc, char **argv)
 
 	while (1) {
 		read_proc();
-		sleep(30);
+		sleep(STEP);
 	}
 
 	exit(EXIT_SUCCESS);

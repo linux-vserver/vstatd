@@ -44,7 +44,7 @@ struct cacct_data {
 	{ 0,               NULL,         0, 0, 0, 0, 0, 0 }
 };
 
-int cacct_parse(xid_t xid, time_t *curtime)
+int cacct_fetch(xid_t xid, time_t *curtime)
 {
 	LOG_TRACEME
 
@@ -83,13 +83,13 @@ int cacct_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", STEP_STR,
-		"DS:recvp:GAUGE:" STEP_STR ":0:9223372036854775807", /* TODO: max with uint64_t? */
-		"DS:recvb:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:sendp:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:sendb:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:failp:GAUGE:" STEP_STR ":0:9223372036854775807",
-		"DS:failb:GAUGE:" STEP_STR ":0:9223372036854775807",
+		"create", path, "-b", timestr, "-s", TOSTR(STEP),
+		"DS:recvp:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"DS:recvb:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"DS:sendp:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"DS:sendb:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"DS:failp:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"DS:failb:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
 		RRA_DEFAULT
 	};
 
