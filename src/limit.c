@@ -71,7 +71,7 @@ int limit_fetch(xid_t xid, time_t *curtime)
 		sb.id = LIMIT[i].id;
 
 		if (vx_limit_stat(xid, &sb) == -1) {
-			log_perror("x_limit_stat(%d)", xid);
+			log_perror("vx_limit_stat(%d)", xid);
 			return -1;
 		}
 
