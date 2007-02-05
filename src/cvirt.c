@@ -77,8 +77,8 @@ int cvirt_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", TOSTR(STEP),
-		"DS:value:GAUGE:" TOSTR(HEARTBEAT) ":0:32768",
+		"create", path, "-b", timestr, "-s", STEP_STR,
+		"DS:value:GAUGE:" HEARTBEAT ":0:32768",
 		RRA_DEFAULT
 	};
 

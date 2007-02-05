@@ -60,10 +60,10 @@ int loadavg_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", TOSTR(STEP),
-		"DS:1MIN:GAUGE:"  TOSTR(HEARTBEAT) ":0:" TOSTR(UINT32_MAX),
-		"DS:5MIN:GAUGE:"  TOSTR(HEARTBEAT) ":0:" TOSTR(UINT32_MAX),
-		"DS:15MIN:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT32_MAX),
+		"create", path, "-b", timestr, "-s", STEP_STR,
+		"DS:1MIN:GAUGE:"  HEARTBEAT ":0:4294967295",
+		"DS:5MIN:GAUGE:"  HEARTBEAT ":0:4294967295",
+		"DS:15MIN:GAUGE:" HEARTBEAT ":0:4294967295",
 		RRA_DEFAULT
 	};
 

@@ -92,10 +92,10 @@ int limit_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", TOSTR(STEP),
-		"DS:min:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
-		"DS:cur:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
-		"DS:max:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"create", path, "-b", timestr, "-s", STEP_STR,
+		"DS:min:GAUGE:" HEARTBEAT ":0:18446744073709551615",
+		"DS:cur:GAUGE:" HEARTBEAT ":0:18446744073709551615",
+		"DS:max:GAUGE:" HEARTBEAT ":0:18446744073709551615",
 		RRA_DEFAULT
 	};
 

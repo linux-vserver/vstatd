@@ -83,13 +83,13 @@ int cacct_rrd_create(char *path)
 	time_t curtime = time(NULL);
 
 	char *argv[] = {
-		"create", path, "-b", timestr, "-s", TOSTR(STEP),
-		"DS:recvp:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
-		"DS:recvb:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
-		"DS:sendp:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
-		"DS:sendb:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
-		"DS:failp:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
-		"DS:failb:GAUGE:" TOSTR(HEARTBEAT) ":0:" TOSTR(UINT64_MAX),
+		"create", path, "-b", timestr, "-s", STEP_STR,
+		"DS:recvp:GAUGE:" HEARTBEAT ":0:18446744073709551615",
+		"DS:recvb:GAUGE:" HEARTBEAT ":0:18446744073709551615",
+		"DS:sendp:GAUGE:" HEARTBEAT ":0:18446744073709551615",
+		"DS:sendb:GAUGE:" HEARTBEAT ":0:18446744073709551615",
+		"DS:failp:GAUGE:" HEARTBEAT ":0:18446744073709551615",
+		"DS:failb:GAUGE:" HEARTBEAT ":0:18446744073709551615",
 		RRA_DEFAULT
 	};
 
