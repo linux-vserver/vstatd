@@ -200,24 +200,22 @@ int main(int argc, char **argv)
 
 	/* start logging & debugging */
 	log_options_t log_options = {
-		.ident  = argv[0],
-		.file   = false,
-		.stderr = false,
-		.syslog = true,
-		.time   = true,
-		.flags  = LOG_PID,
+		.log_ident    = argv[0],
+		.log_dest     = LOGD_SYSLOG,
+		.log_opts     = LOGO_PRIO|LOGO_TIME|LOGO_IDENT|LOGO_PID,
+		.log_facility = LOG_DAEMON,
 	};
 
 	const char *logfile = cfg_getstr(cfg, "logfile");
 
-	if (logfile && str_len(logfile) > 0) {
-		log_options.file = true;
-		log_options.fd   = open_append(logfile);
+	if (!str_isempty(logfile)) {
+		log_options.log_dest |= LOGD_FILE;
+		log_options.log_fd = open_append(logfile);
 	}
 
 	if (debug) {
-		log_options.stderr = true;
-		log_options.mask   = LOG_UPTO(LOG_DEBUG);
+		log_options.log_dest |= LOGD_STDERR;
+		log_options.log_mask = ((1 << (LOGP_TRACE + 1)) - 1);
 	}
 
 	log_init(&log_options);
