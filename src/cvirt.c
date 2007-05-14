@@ -33,6 +33,7 @@ struct cvirt_data {
 	char *db;
 	int value;
 } CVIRT[] = {
+	{ "tasks_TOTAL",    0 },
 	{ "thread_TOTAL",   0 },
 	{ "thread_RUNNING", 0 },
 	{ "thread_UNINTR",  0 },
@@ -58,10 +59,11 @@ int cvirt_fetch(xid_t xid, time_t *curtime)
 		}
 
 		switch (i) {
-			case 0: CVIRT[i].value = sb.nr_threads; break;
-			case 1: CVIRT[i].value = sb.nr_running; break;
-			case 2: CVIRT[i].value = sb.nr_unintr; break;
-			case 3: CVIRT[i].value = sb.nr_onhold; break;
+			case 0: CVIRT[i].value = sb.tasks; break;
+			case 1: CVIRT[i].value = sb.nr_threads; break;
+			case 2: CVIRT[i].value = sb.nr_running; break;
+			case 3: CVIRT[i].value = sb.nr_unintr; break;
+			case 4: CVIRT[i].value = sb.nr_onhold; break;
 		}
 	}
 

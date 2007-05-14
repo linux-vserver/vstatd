@@ -40,6 +40,7 @@ struct cacct_data {
 	{ NXA_SOCK_UNIX,   "net_UNIX",   0, 0, 0, 0, 0, 0 },
 	{ NXA_SOCK_INET,   "net_INET",   0, 0, 0, 0, 0, 0 },
 	{ NXA_SOCK_INET6,  "net_INET6",  0, 0, 0, 0, 0, 0 },
+	{ NXA_SOCK_PACKET, "net_PACKET", 0, 0, 0, 0, 0, 0 },
 	{ NXA_SOCK_OTHER,  "net_OTHER",  0, 0, 0, 0, 0, 0 },
 	{ 0,               NULL,         0, 0, 0, 0, 0, 0 }
 };
